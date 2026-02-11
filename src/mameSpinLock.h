@@ -35,7 +35,7 @@ namespace detail {
  * TODO: Implement with inline assembly
  */
 inline void cpu_relax() {
-    // TODO: asm volatile("pause" ::: "memory");
+    asm volatile("pause" ::: "memory");
 }
 
 /**
@@ -44,7 +44,7 @@ inline void cpu_relax() {
  * TODO: Implement with inline assembly
  */
 inline void compiler_barrier() {
-    // TODO: asm volatile("" ::: "memory");
+    asm volatile("" ::: "memory");
 }
 
 /**
