@@ -1,0 +1,10 @@
+# Build artifacts
+/target/
+
+# Steering files (task management - temporary)
+.steering/*
+!.steering/.gitkeep
+
+.claude/settings.local.json.clause
+.claude
+CLAUDE.md
