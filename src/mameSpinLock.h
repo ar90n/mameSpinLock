@@ -32,7 +32,6 @@ namespace detail {
  * cpu_relax - Hint to CPU that we are in a spin loop
  * x86-64: PAUSE instruction
  *
- * TODO: Implement with inline assembly
  */
 inline void cpu_relax() {
     asm volatile("pause" ::: "memory");
@@ -41,7 +40,6 @@ inline void cpu_relax() {
 /**
  * compiler_barrier - Prevent compiler reordering
  *
- * TODO: Implement with inline assembly
  */
 inline void compiler_barrier() {
     asm volatile("" ::: "memory");
@@ -69,12 +67,18 @@ inline void fence_seq_cst() {
  *
  * x86-64: LOCK CMPXCHGQ
  *
- * TODO: Implement with inline assembly
  */
 inline bool cas_u64(volatile uint64_t* p, uint64_t* expected, uint64_t desired) {
-    (void)p; (void)expected; (void)desired;
-    // TODO: Implement using lock cmpxchgq
-    return false;
+    bool success;
+    asm volatile(
+        "lock cmpxchgq %[desired], %[ptr]"
+        : "=@ccz" (success),
+          "+a" (*expected),
+          [ptr] "+m" (*p)
+        : [desired] "r" (desired)
+        : "memory"
+    );
+    return success;
 }
 
 /**
