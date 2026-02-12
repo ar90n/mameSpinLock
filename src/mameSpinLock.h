@@ -124,28 +124,33 @@ struct SpinLockTTAS {
 
     /**
      * lock - Acquire the lock (blocking)
-     * TODO: Implement TTAS algorithm
      */
     void lock() {
-        // TODO: Implement
+        while(true) {
+            while(detail::load_acquire_u64(&state) != 0) {
+                detail::cpu_relax();
+            }
+            uint64_t expected = 0;
+            if(detail::cas_u64(&state, &expected, 1)) {
+                return;
+            }
+        }
     }
 
     /**
      * unlock - Release the lock
-     * TODO: Implement
      */
     void unlock() {
-        // TODO: Implement
+        detail::store_release_u64(&state, 0);
     }
 
     /**
      * try_lock - Try to acquire the lock (non-blocking)
      * Returns true if lock acquired, false otherwise
-     * TODO: Implement
      */
     bool try_lock() {
-        // TODO: Implement
-        return false;
+        uint64_t expected = 0;
+        return detail::cas_u64(&state, &expected, 1);
     }
 };
 
