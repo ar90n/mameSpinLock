@@ -86,12 +86,11 @@ inline bool cas_u64(volatile uint64_t* p, uint64_t* expected, uint64_t desired) 
  *
  * x86-64: Regular load + compiler barrier (x86 has strong memory model)
  *
- * TODO: Implement
  */
 inline uint64_t load_acquire_u64(const volatile uint64_t* p) {
-    (void)p;
-    // TODO: Implement
-    return 0;
+    auto const ret = *p;
+    compiler_barrier();
+    return ret;
 }
 
 /**
@@ -99,11 +98,10 @@ inline uint64_t load_acquire_u64(const volatile uint64_t* p) {
  *
  * x86-64: Compiler barrier + regular store (x86 has strong memory model)
  *
- * TODO: Implement
  */
 inline void store_release_u64(volatile uint64_t* p, uint64_t v) {
-    (void)p; (void)v;
-    // TODO: Implement
+    compiler_barrier();
+    *p = v;
 }
 
 } // namespace detail
