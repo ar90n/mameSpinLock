@@ -169,18 +169,28 @@ struct TicketLock {
 
     /**
      * lock - Acquire the lock (blocking, FIFO order)
-     * TODO: Implement using CAS-based fetch_add
      */
     void lock() {
-        // TODO: Implement
+        uint64_t const my_ticket = fetch_add_u64(&next, 1);
+        while(detail::load_acquire_u64(&owner) != my_ticket) {
+            detail::cpu_relax();
+        }
     }
 
     /**
      * unlock - Release the lock
-     * TODO: Implement
      */
     void unlock() {
-        // TODO: Implement
+        detail::store_release_u64(&owner, detail::load_acquire_u64(&owner) + 1);
+    }
+
+private:
+    static inline uint64_t fetch_add_u64(volatile uint64_t *p, uint64_t v) {
+        uint64_t old;
+        do{
+            old = detail::load_acquire_u64(p);
+        } while(!detail::cas_u64(p, &old, old + v));
+        return old;
     }
 };
 
