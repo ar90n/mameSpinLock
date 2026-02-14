@@ -6,7 +6,7 @@ CXXFLAGS := -std=c++17 -Wall -Wextra -pthread -I./src -I./tests
 LDFLAGS  := -pthread
 
 # Test sources
-TEST_SRCS := tests/test_atomic.cpp tests/test_spinlock.cpp tests/test_ticket.cpp
+TEST_SRCS := tests/test_atomic.cpp tests/test_spinlock.cpp tests/test_ticket.cpp tests/test_mcs.cpp
 TEST_BINS := $(TEST_SRCS:.cpp=)
 
 .PHONY: all test clean
