@@ -1,5 +1,6 @@
 # mameSpinLock
 
+[![CI](https://github.com/ar90n/mameSpinLock/actions/workflows/ci.yml/badge.svg)](https://github.com/ar90n/mameSpinLock/actions/workflows/ci.yml)
 [![C++](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://en.cppreference.com/w/cpp/17)
 [![Header Only](https://img.shields.io/badge/header--only-brightgreen.svg)](src/mameSpinLock.h)
 [![x86-64](https://img.shields.io/badge/arch-x86--64-orange.svg)]()
