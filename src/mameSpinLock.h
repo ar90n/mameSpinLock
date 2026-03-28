@@ -4,7 +4,7 @@
  * Learning-oriented implementation using only CPU instructions (CAS/barriers).
  * No OS-dependent primitives (futex, pthread mutex, etc.)
  *
- * Initial target: x86-64 only
+ * Supported architectures: x86-64, aarch64
  */
 
 #ifndef MAME_SPINLOCK_H
@@ -12,9 +12,9 @@
 
 #include <cstdint>
 
-// Architecture check: x86-64 only for v0
-#if !defined(__x86_64__)
-#error "mameSpinLock v0 supports x86-64 only"
+// Architecture check
+#if !defined(__x86_64__) && !defined(__aarch64__)
+#error "mameSpinLock supports x86-64 and aarch64 only"
 #endif
 
 namespace mame_spinlock {
@@ -31,10 +31,14 @@ namespace detail {
 /**
  * cpu_relax - Hint to CPU that we are in a spin loop
  * x86-64: PAUSE instruction
- *
+ * aarch64: YIELD instruction
  */
 inline void cpu_relax() {
+#if defined(__x86_64__)
     asm volatile("pause" ::: "memory");
+#elif defined(__aarch64__)
+    asm volatile("yield" ::: "memory");
+#endif
 }
 
 /**
@@ -48,11 +52,14 @@ inline void compiler_barrier() {
 /**
  * fence_seq_cst - Full memory fence (sequential consistency)
  * x86-64: MFENCE instruction
- *
- * TODO: Implement with inline assembly (optional for v0)
+ * aarch64: DMB ISH (inner shareable full barrier)
  */
 inline void fence_seq_cst() {
-    // TODO: asm volatile("mfence" ::: "memory");
+#if defined(__x86_64__)
+    asm volatile("mfence" ::: "memory");
+#elif defined(__aarch64__)
+    asm volatile("dmb ish" ::: "memory");
+#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -66,9 +73,10 @@ inline void fence_seq_cst() {
  *             else { *expected = *p; return false; }
  *
  * x86-64: LOCK CMPXCHGQ
- *
+ * aarch64: LDXR/STXR (LL/SC) loop with full barriers
  */
 inline bool cas_u64(volatile uint64_t* p, uint64_t* expected, uint64_t desired) {
+#if defined(__x86_64__)
     bool success;
     asm volatile(
         "lock cmpxchgq %[desired], %[ptr]"
@@ -79,6 +87,35 @@ inline bool cas_u64(volatile uint64_t* p, uint64_t* expected, uint64_t desired) 
         : "memory"
     );
     return success;
+#elif defined(__aarch64__)
+    uint64_t old_val;
+    uint32_t tmp;
+    asm volatile(
+        "1:\n"
+        "    ldxr   %[old], %[ptr]\n"
+        "    cmp    %[old], %[exp]\n"
+        "    b.ne   2f\n"
+        "    stxr   %w[tmp], %[des], %[ptr]\n"
+        "    cbnz   %w[tmp], 1b\n"
+        "    dmb    ish\n"
+        "    mov    %[old], %[exp]\n"
+        "    b      3f\n"
+        "2:\n"
+        "    clrex\n"
+        "3:\n"
+        : [old] "=&r" (old_val),
+          [tmp] "=&r" (tmp),
+          [ptr] "+Q" (*p)
+        : [exp] "r" (*expected),
+          [des] "r" (desired)
+        : "memory", "cc"
+    );
+    if (old_val != *expected) {
+        *expected = old_val;
+        return false;
+    }
+    return true;
+#endif
 }
 
 /**
@@ -88,9 +125,11 @@ inline bool cas_u64(volatile uint64_t* p, uint64_t* expected, uint64_t desired) 
  *             else { *expected = *p; return false; }
  *
  * x86-64: LOCK CMPXCHGQ (pointers are 64-bit)
+ * aarch64: LDXR/STXR (LL/SC) loop with full barriers
  */
 template<typename T>
 inline bool cas_ptr(volatile T** p, T** expected, T* desired) {
+#if defined(__x86_64__)
     bool success;
     asm volatile(
         "lock cmpxchgq %[desired], %[ptr]"
@@ -101,6 +140,35 @@ inline bool cas_ptr(volatile T** p, T** expected, T* desired) {
         : "memory"
     );
     return success;
+#elif defined(__aarch64__)
+    T* old_val;
+    uint32_t tmp;
+    asm volatile(
+        "1:\n"
+        "    ldxr   %[old], %[ptr]\n"
+        "    cmp    %[old], %[exp]\n"
+        "    b.ne   2f\n"
+        "    stxr   %w[tmp], %[des], %[ptr]\n"
+        "    cbnz   %w[tmp], 1b\n"
+        "    dmb    ish\n"
+        "    mov    %[old], %[exp]\n"
+        "    b      3f\n"
+        "2:\n"
+        "    clrex\n"
+        "3:\n"
+        : [old] "=&r" (old_val),
+          [tmp] "=&r" (tmp),
+          [ptr] "+Q" (*p)
+        : [exp] "r" (*expected),
+          [des] "r" (desired)
+        : "memory", "cc"
+    );
+    if (old_val != *expected) {
+        *expected = old_val;
+        return false;
+    }
+    return true;
+#endif
 }
 
 /**
@@ -109,9 +177,11 @@ inline bool cas_ptr(volatile T** p, T** expected, T* desired) {
  * Atomically: old = *p; *p = new_val; return old;
  *
  * x86-64: XCHGQ (implicitly locked)
+ * aarch64: LDXR/STXR (LL/SC) loop with full barriers
  */
 template<typename T>
 inline T* exchange_ptr(volatile T** p, T* new_val) {
+#if defined(__x86_64__)
     asm volatile(
         "xchgq %[new_val], %[ptr]"
         : [new_val] "+r" (new_val),
@@ -120,28 +190,66 @@ inline T* exchange_ptr(volatile T** p, T* new_val) {
         : "memory"
     );
     return new_val;
+#elif defined(__aarch64__)
+    T* old_val;
+    uint32_t tmp;
+    asm volatile(
+        "dmb    ish\n"
+        "1:\n"
+        "    ldxr   %[old], %[ptr]\n"
+        "    stxr   %w[tmp], %[new_val], %[ptr]\n"
+        "    cbnz   %w[tmp], 1b\n"
+        "dmb    ish\n"
+        : [old] "=&r" (old_val),
+          [tmp] "=&r" (tmp),
+          [ptr] "+Q" (*p)
+        : [new_val] "r" (new_val)
+        : "memory"
+    );
+    return old_val;
+#endif
 }
 /**
  * load_acquire_u64 - Load with acquire semantics
  *
- * x86-64: Regular load + compiler barrier (x86 has strong memory model)
- *
+ * x86-64: Regular load + compiler barrier (TSO makes HW fence unnecessary)
+ * aarch64: LDAR instruction (load-acquire, HW fence required for weak model)
  */
 inline uint64_t load_acquire_u64(const volatile uint64_t* p) {
+#if defined(__x86_64__)
     auto const ret = *p;
     compiler_barrier();
     return ret;
+#elif defined(__aarch64__)
+    uint64_t ret;
+    asm volatile(
+        "ldar %[ret], %[ptr]"
+        : [ret] "=r" (ret)
+        : [ptr] "Q" (*p)
+        : "memory"
+    );
+    return ret;
+#endif
 }
 
 /**
  * store_release_u64 - Store with release semantics
  *
- * x86-64: Compiler barrier + regular store (x86 has strong memory model)
- *
+ * x86-64: Compiler barrier + regular store (TSO makes HW fence unnecessary)
+ * aarch64: STLR instruction (store-release, HW fence required for weak model)
  */
 inline void store_release_u64(volatile uint64_t* p, uint64_t v) {
+#if defined(__x86_64__)
     compiler_barrier();
     *p = v;
+#elif defined(__aarch64__)
+    asm volatile(
+        "stlr %[val], %[ptr]"
+        : [ptr] "=Q" (*p)
+        : [val] "r" (v)
+        : "memory"
+    );
+#endif
 }
 
 } // namespace detail
