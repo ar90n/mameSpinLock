@@ -1,6 +1,12 @@
 # Build artifacts
 /target/
 
+# Compiled test binaries
+tests/test_atomic
+tests/test_spinlock
+tests/test_ticket
+tests/test_mcs
+
 # Steering files (task management - temporary)
 .steering/*
 !.steering/.gitkeep
